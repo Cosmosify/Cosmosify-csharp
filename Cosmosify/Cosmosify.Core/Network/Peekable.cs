@@ -1,27 +1,50 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Net.Security;
-using System.Net.Sockets;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+using Cosmosify.Core.Base;
 
-namespace Cosmosify.Core.Base
+namespace Cosmosify.Core.Network
 {
-    public class PeekableSslStream : SslStream
+    internal interface IPeekable
+    {
+        int OriginalRead(byte[] buffer, int offset, int count);
+
+        int OriginalReadByte();
+
+        void Peek(byte[] buffer, int offset, int count);
+    }
+
+
+    internal class Peekable
     {
         private byte[] _buffer = new byte[0];
         private int _bufferPos = 0;
 
+        private readonly IPeekable _peekable;
 
-        public override unsafe int Read(byte[] buffer, int offset, int count)
+        public Peekable(IPeekable peekable)
         {
-            // TODO: Parameter check
+            this._peekable = peekable;
+        }
+
+
+        public unsafe int Read(byte[] buffer, int offset, int count)
+        {
+            //
+            // Parameter check
+            //
+            (buffer, offset, count).CheckValidation();
+
 
             int bufCount = this._buffer.Length - this._bufferPos;
 
             if (bufCount == 0)
             {
-                return base.Read(buffer, offset, count);
+                return this._peekable.OriginalRead(buffer, offset, count);
             }
 
 
@@ -40,7 +63,8 @@ namespace Cosmosify.Core.Base
         }
 
 
-        public override int ReadByte()
+
+        public int ReadByte()
         {
             if (this._bufferPos < this._buffer.Length)
             {
@@ -48,14 +72,17 @@ namespace Cosmosify.Core.Base
             }
             else
             {
-                return base.ReadByte();
+                return this._peekable.OriginalReadByte();
             }
         }
 
 
         public unsafe void Peek(byte[] buffer, int offset, int count)
         {
-            // TODO: Parameter check
+            //
+            // Parameter check
+            //
+            (buffer, offset, count).CheckValidation();
 
             // TODO: Recover to a consistent state if any exception is thrown in Read()
 
@@ -76,7 +103,7 @@ namespace Cosmosify.Core.Base
                 while (bufCount < count)
                 {
                     // TODO: Handle the occational situation where Read() reaches the end & returns 0
-                    int tmp = base.Read(newBuffer, bufCount, count - bufCount);
+                    int tmp = this._peekable.OriginalRead(newBuffer, bufCount, count - bufCount);
                     bufCount += tmp;
                 }
                 Debug.Assert(bufCount == count);
@@ -91,52 +118,6 @@ namespace Cosmosify.Core.Base
             {
                 Marshal.Copy((IntPtr)pStart, buffer, offset, count);
             }
-        }
-
-
-        public PeekableSslStream(Stream innerStream) 
-            : base(innerStream)
-        {
-        }
-
-        public PeekableSslStream(Stream innerStream, bool leaveInnerStreamOpen)
-            : base(innerStream, leaveInnerStreamOpen)
-        {
-        }
-
-        public PeekableSslStream(
-            Stream innerStream,
-            bool leaveInnerStreamOpen,
-            RemoteCertificateValidationCallback userCertificateValidationCallback)
-            : base(innerStream,
-                leaveInnerStreamOpen,
-                userCertificateValidationCallback)
-        {
-        }
-
-        public PeekableSslStream(
-            Stream innerStream,
-            bool leaveInnerStreamOpen,
-            RemoteCertificateValidationCallback userCertificateValidationCallback,
-            LocalCertificateSelectionCallback userCertificateSelectionCallback)
-            : base(innerStream,
-                leaveInnerStreamOpen,
-                userCertificateValidationCallback,
-                userCertificateSelectionCallback)
-        {
-        }
-
-        public PeekableSslStream(
-            Stream innerStream,
-            bool leaveInnerStreamOpen,
-            RemoteCertificateValidationCallback userCertificateValidationCallback,
-            LocalCertificateSelectionCallback userCertificateSelectionCallback, EncryptionPolicy encryptionPolicy)
-            : base(innerStream,
-                leaveInnerStreamOpen,
-                userCertificateValidationCallback,
-                userCertificateSelectionCallback,
-                encryptionPolicy)
-        {
         }
     }
 }
